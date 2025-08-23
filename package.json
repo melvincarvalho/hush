@@ -1,0 +1,49 @@
+{
+  "name": "hush",
+  "version": "0.0.1",
+  "description": "Encrypted messaging PWA using Nostr relays",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 3000",
+    "dev": "python3 -m http.server 8080",
+    "encode": "node encode.js",
+    "decode": "node decode.js",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "nostr",
+    "encryption",
+    "messaging",
+    "pwa",
+    "privacy",
+    "nip04"
+  ],
+  "author": "Melvin Carvalho",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/melvincarvalho/hush.git"
+  },
+  "bugs": {
+    "url": "https://github.com/melvincarvalho/hush/issues"
+  },
+  "homepage": "https://github.com/melvincarvalho/hush#readme",
+  "dependencies": {
+    "nostr-tools": "^2.7.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "index.html",
+    "manifest.json",
+    "sw.js",
+    "encode.js",
+    "decode.js",
+    "README.md"
+  ],
+  "bin": {
+    "hush-encode": "./encode.js",
+    "hush-decode": "./decode.js"
+  }
+}

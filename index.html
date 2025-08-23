@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="./manifest.json">
+  <title>Hush</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #000;
+      color: #fff;
+      height: 100vh;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    h1 { 
+      font-size: 48px; 
+      margin: 20px 0;
+    }
+    .key-box {
+      background: #111;
+      padding: 15px;
+      border-radius: 12px;
+      font-family: monospace;
+      word-break: break-all;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    textarea {
+      width: 100%;
+      height: 120px;
+      background: #111;
+      border: 2px solid #333;
+      color: #fff;
+      font-size: 16px;
+      padding: 15px;
+      border-radius: 12px;
+      resize: none;
+    }
+    button {
+      width: 100%;
+      padding: 18px;
+      font-size: 18px;
+      font-weight: bold;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      margin: 10px 0;
+    }
+    button:active {
+      opacity: 0.7;
+    }
+    .success {
+      background: #00ff0040;
+      padding: 15px;
+      border-radius: 12px;
+      text-align: center;
+      margin: 10px 0;
+    }
+    .messages {
+      margin: 20px 0;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .message {
+      background: #111;
+      padding: 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    .message-time {
+      color: #666;
+      font-size: 12px;
+    }
+    .refresh-btn {
+      background: #333;
+      color: #fff;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      margin: 10px 0;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤫 Hush</h1>
+    
+    <div class="key-box" id="key">Loading...</div>
+    
+    <textarea id="msg" placeholder="Paste or type something..."></textarea>
+    
+    <button id="sendBtn">HUSH IT</button>
+    <button id="copyBtn" style="background:#222; color:#fff;">COPY KEY</button>
+    <button id="importBtn" style="background:#444; color:#fff;">IMPORT KEY</button>
+    
+    <div id="status"></div>
+    
+    <button id="refreshBtn" class="refresh-btn">↻ REFRESH MESSAGES</button>
+    <div id="messages" class="messages"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/nostr-tools@2.7.0/lib/nostr.bundle.js" crossorigin="anonymous" onerror="console.error('Failed to load nostr-tools')"></script>
+  <script>
+  // Track original JSON.parse before override
+  const originalParse = JSON.parse;
+  
+  // Only log parse errors, don't prevent them
+  window.addEventListener('error', function(e) {
+    if (e.message && e.message.includes('JSON.parse')) {
+      console.log('JSON parse error caught:', e.message);
+      // Check if it's from the nostr-tools library
+      if (e.filename && e.filename.includes('nostr')) {
+        console.log('Error is from nostr-tools library, ignoring...');
+        e.preventDefault();
+        return false;
+      }
+    }
+  }, true);
+  
+  // Wait for nostr-tools to load
+  window.addEventListener('DOMContentLoaded', function() {
+    // Check if NostrTools loaded
+    if (!window.NostrTools) {
+      console.error('NostrTools not loaded');
+      document.getElementById('key').textContent = 'Error: NostrTools library failed to load';
+      return;
+    }
+    
+    // Utility functions for hex conversion
+    function bytesToHex(bytes) {
+      return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    
+    function hexToBytes(hex) {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+      }
+      return bytes;
+    }
+    
+    // Get or create key
+    let skHex, sk, pk;
+    try {
+      skHex = localStorage.getItem('hush_key');
+      if (!skHex || skHex.length !== 64) {
+        // Generate new key if none exists or invalid
+        sk = window.NostrTools.generateSecretKey();
+        skHex = bytesToHex(sk);
+        localStorage.setItem('hush_key', skHex);
+      } else {
+        sk = hexToBytes(skHex);
+      }
+      pk = window.NostrTools.getPublicKey(sk);
+    } catch (e) {
+      console.error('Key initialization error:', e);
+      // Generate new key on error
+      sk = window.NostrTools.generateSecretKey();
+      skHex = bytesToHex(sk);
+      try {
+        localStorage.setItem('hush_key', skHex);
+      } catch (storageError) {
+        console.error('Storage error:', storageError);
+      }
+      pk = window.NostrTools.getPublicKey(sk);
+    }
+    
+    // Display key (truncated) and public key
+    document.getElementById('key').innerHTML = 
+      'Private: ' + skHex.slice(0, 12) + '...' + skHex.slice(-6) + '<br>' +
+      'Public: ' + pk.slice(0, 16) + '...';
+    
+    // Auto-focus textarea
+    document.getElementById('msg').focus();
+    
+    // Attach event listeners
+    document.getElementById('sendBtn').onclick = send;
+    document.getElementById('copyBtn').onclick = copyKey;
+    document.getElementById('importBtn').onclick = importKey;
+    document.getElementById('refreshBtn').onclick = fetchMessages;
+    
+    // Initialize SimplePool for fetching
+    const pool = new window.NostrTools.SimplePool();
+    
+    // Auto-fetch messages on load
+    fetchMessages();
+    
+    // Handle shared text from Android share intent
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedText = urlParams.get('shared_text');
+    if (sharedText) {
+      document.getElementById('msg').value = sharedText;
+      document.getElementById('msg').focus();
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
+    async function send() {
+      const msg = document.getElementById('msg').value;
+      if (!msg) return;
+      
+      const button = document.getElementById('sendBtn');
+      // Disable button
+      button.disabled = true;
+      button.textContent = 'SENDING...';
+      
+      try {
+        // Encrypt to self (NIP-04)
+        const encrypted = await window.NostrTools.nip04.encrypt(sk, pk, msg);
+        
+        // Create unsigned event
+        const unsignedEvent = {
+          kind: 31337,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [['p', pk], ['hush', '1']],
+          content: encrypted,
+          pubkey: pk
+        };
+        
+        // Finalize event (signs it and adds id)
+        const signedEvent = window.NostrTools.finalizeEvent(unsignedEvent, sk);
+        
+        // Send to relays (parallel)
+        const relays = [
+          'wss://relay.damus.io',
+          'wss://nos.lol',
+          'wss://relay.primal.net'
+        ];
+        
+        await Promise.any(relays.map(async url => {
+          const relay = await window.NostrTools.Relay.connect(url);
+          await relay.publish(signedEvent);
+          relay.close();
+        }));
+        
+        // Success!
+        document.getElementById('msg').value = '';
+        document.getElementById('status').innerHTML = 
+          '<div class="success">✓ Hushed!</div>';
+        
+        setTimeout(() => {
+          document.getElementById('status').innerHTML = '';
+        }, 2000);
+        
+      } catch(e) {
+        alert('Failed to send: ' + e.message);
+      }
+      
+      // Re-enable button
+      button.disabled = false;
+      button.textContent = 'HUSH IT';
+    }
+    
+    function copyKey() {
+      navigator.clipboard.writeText(skHex);
+      document.getElementById('status').innerHTML = 
+        '<div class="success">Key copied!</div>';
+      setTimeout(() => {
+        document.getElementById('status').innerHTML = '';
+      }, 2000);
+    }
+    
+    function importKey() {
+      const newKey = prompt('Enter your private key (64 hex characters):');
+      if (!newKey) return;
+      
+      // Validate hex key
+      if (!/^[0-9a-fA-F]{64}$/.test(newKey)) {
+        alert('Invalid private key. Must be 64 hex characters.');
+        return;
+      }
+      
+      // Save and reload
+      localStorage.setItem('hush_key', newKey);
+      location.reload();
+    }
+    
+    // Handle paste with Cmd/Ctrl+V
+    document.getElementById('msg').addEventListener('paste', () => {
+      setTimeout(() => {
+        if (document.getElementById('msg').value) {
+          // Auto-send after paste (optional)
+          // send();
+        }
+      }, 10);
+    });
+    
+    // Fetch messages from relays
+    async function fetchMessages() {
+      const button = document.getElementById('refreshBtn');
+      button.disabled = true;
+      button.textContent = '⏳ FETCHING...';
+      
+      try {
+        const relays = [
+          'wss://relay.primal.net',  // This one works best
+          'wss://relay.damus.io',
+          'wss://nos.lol'
+        ];
+        
+        console.log('Fetching messages for public key:', pk);
+        console.log('Current timestamp:', Math.floor(Date.now() / 1000));
+        console.log('Current time:', new Date().toLocaleString());
+        
+        // Fetch events where we are tagged or are the author
+        // Use a recent timestamp to get newer events
+        const since = Math.floor(Date.now() / 1000) - (24 * 60 * 60); // Last 24 hours
+        console.log('Fetching events since:', since, new Date(since * 1000).toLocaleString());
+        
+        const filter = {
+          kinds: [31337],
+          authors: [pk],
+          limit: 100
+        };
+        
+        const taggedFilter = {
+          kinds: [31337],
+          '#p': [pk],
+          limit: 100
+        };
+        
+        // Use the same method as CLI
+        const events = await pool.querySync(relays, filter);
+        const taggedEvents = await pool.querySync(relays, taggedFilter);
+        
+        // Combine and deduplicate
+        const allEvents = [...events, ...taggedEvents];
+        const uniqueEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());
+        
+        console.log('Found events:', uniqueEvents.length);
+        console.log('Events:', uniqueEvents.map(e => ({
+          id: e.id.slice(0, 8),
+          created_at: e.created_at,
+          time: new Date(e.created_at * 1000).toLocaleString(),
+          content_preview: e.content.slice(0, 20)
+        })));
+        
+        // Sort by timestamp (newest first)
+        uniqueEvents.sort((a, b) => b.created_at - a.created_at);
+        
+        // Display messages
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.innerHTML = '';
+        
+        if (uniqueEvents.length === 0) {
+          messagesDiv.innerHTML = '<div class="message">No messages yet</div>';
+        } else {
+          for (const event of uniqueEvents) {
+            try {
+              // Decrypt message
+              const otherPubkey = event.pubkey === pk ? 
+                (event.tags.find(tag => tag[0] === 'p')?.[1] || pk) : 
+                event.pubkey;
+              
+              const decrypted = await window.NostrTools.nip04.decrypt(sk, otherPubkey, event.content);
+              
+              // Create message element
+              const messageEl = document.createElement('div');
+              messageEl.className = 'message';
+              
+              const timeEl = document.createElement('div');
+              timeEl.className = 'message-time';
+              timeEl.textContent = new Date(event.created_at * 1000).toLocaleString();
+              
+              const contentEl = document.createElement('div');
+              contentEl.textContent = decrypted;
+              
+              messageEl.appendChild(timeEl);
+              messageEl.appendChild(contentEl);
+              messagesDiv.appendChild(messageEl);
+              
+            } catch (e) {
+              console.warn('Could not decrypt message:', e);
+            }
+          }
+        }
+        
+      } catch (e) {
+        console.error('Error fetching messages:', e);
+        document.getElementById('messages').innerHTML = 
+          '<div class="message">Error fetching messages</div>';
+      }
+      
+      button.disabled = false;
+      button.textContent = '↻ REFRESH MESSAGES';
+    }
+    
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(registration => console.log('SW registered'))
+        .catch(error => console.log('SW registration failed'));
+    }
+  });
+  </script>
+</body>
+</html>
