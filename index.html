@@ -79,6 +79,30 @@
       border-radius: 8px;
       margin: 8px 0;
       font-size: 14px;
+      position: relative;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #333;
+      color: #fff;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0.7;
+    }
+    .copy-btn:hover {
+      opacity: 1;
+      background: #555;
+    }
+    .message-content {
+      margin-right: 60px;
     }
     .message-time {
       color: #666;
@@ -111,6 +135,12 @@
     
     <button id="refreshBtn" class="refresh-btn">↻ REFRESH MESSAGES</button>
     <div id="messages" class="messages"></div>
+    
+    <div id="installPrompt" style="display:none; background:#333; padding:15px; border-radius:12px; margin:10px 0; text-align:center;">
+      <div style="margin-bottom:10px;">📱 Install Hush as an app</div>
+      <button id="installBtn" style="background:#fff; color:#000; padding:10px 20px; border:none; border-radius:8px;">Install Now</button>
+      <button id="dismissPrompt" style="background:transparent; color:#666; border:1px solid #666; padding:10px 20px; border-radius:8px; margin-left:10px;">Not Now</button>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/nostr-tools@2.7.0/lib/nostr.bundle.js" crossorigin="anonymous" onerror="console.error('Failed to load nostr-tools')"></script>
@@ -377,10 +407,29 @@
               timeEl.textContent = new Date(event.created_at * 1000).toLocaleString();
               
               const contentEl = document.createElement('div');
+              contentEl.className = 'message-content';
               contentEl.textContent = decrypted;
+              
+              const copyBtn = document.createElement('button');
+              copyBtn.className = 'copy-btn';
+              copyBtn.textContent = 'Copy';
+              copyBtn.onclick = () => {
+                navigator.clipboard.writeText(decrypted).then(() => {
+                  copyBtn.textContent = '✓';
+                  setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                  }, 1000);
+                }).catch(() => {
+                  copyBtn.textContent = '✗';
+                  setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                  }, 1000);
+                });
+              };
               
               messageEl.appendChild(timeEl);
               messageEl.appendChild(contentEl);
+              messageEl.appendChild(copyBtn);
               messagesDiv.appendChild(messageEl);
               
             } catch (e) {
@@ -398,6 +447,35 @@
       button.disabled = false;
       button.textContent = '↻ REFRESH MESSAGES';
     }
+    
+    // PWA Install functionality
+    let deferredPrompt;
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('installPrompt').style.display = 'block';
+    });
+    
+    document.getElementById('installBtn').onclick = async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const result = await deferredPrompt.userChoice;
+        if (result.outcome === 'accepted') {
+          document.getElementById('installPrompt').style.display = 'none';
+        }
+        deferredPrompt = null;
+      }
+    };
+    
+    document.getElementById('dismissPrompt').onclick = () => {
+      document.getElementById('installPrompt').style.display = 'none';
+    };
+    
+    // Hide install prompt if already installed
+    window.addEventListener('appinstalled', () => {
+      document.getElementById('installPrompt').style.display = 'none';
+    });
     
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
