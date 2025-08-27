@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Hush - Your clipboard, everywhere. Encrypted. Private. Instant. Copy on phone, paste on desktop. No accounts needed.">
+  <meta name="theme-color" content="#000000">
+  <title>Hush - Encrypted Universal Clipboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #000;
+      color: #fff;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      background: rgba(0,0,0,0.9);
+      backdrop-filter: blur(10px);
+      z-index: 1000;
+      padding: 20px 0;
+    }
+    
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .logo {
+      font-size: 28px;
+      font-weight: bold;
+    }
+    
+    .nav-links {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+    }
+    
+    .nav-links a {
+      color: #fff;
+      text-decoration: none;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+    
+    .nav-links a:hover {
+      opacity: 1;
+    }
+    
+    .try-now-btn {
+      background: #fff;
+      color: #000;
+      padding: 10px 24px;
+      border-radius: 24px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.2s;
+    }
+    
+    .try-now-btn:hover {
+      transform: scale(1.05);
+    }
+    
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 120px 0 80px;
+    }
+    
+    .hero-content {
+      text-align: center;
+    }
+    
+    h1 {
+      font-size: clamp(48px, 8vw, 80px);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #fff 0%, #888 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .subtitle {
+      font-size: clamp(20px, 3vw, 28px);
+      color: #888;
+      margin-bottom: 48px;
+      font-weight: 400;
+    }
+    
+    .hero-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-bottom: 60px;
+      flex-wrap: wrap;
+    }
+    
+    .btn-primary {
+      background: #fff;
+      color: #000;
+      padding: 16px 32px;
+      font-size: 18px;
+      font-weight: 600;
+      border-radius: 32px;
+      text-decoration: none;
+      transition: all 0.3s;
+      display: inline-block;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(255,255,255,0.2);
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      color: #fff;
+      padding: 16px 32px;
+      font-size: 18px;
+      font-weight: 600;
+      border: 2px solid #333;
+      border-radius: 32px;
+      text-decoration: none;
+      transition: all 0.3s;
+      display: inline-block;
+    }
+    
+    .btn-secondary:hover {
+      border-color: #666;
+      background: #111;
+    }
+    
+    /* Demo Section */
+    .demo-visual {
+      position: relative;
+      max-width: 900px;
+      margin: 0 auto 120px;
+      padding: 40px;
+      background: #111;
+      border-radius: 24px;
+      border: 1px solid #222;
+    }
+    
+    .demo-flow {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 40px;
+    }
+    
+    .device {
+      text-align: center;
+    }
+    
+    .device-icon {
+      width: 120px;
+      height: 120px;
+      background: #1a1a1a;
+      border: 2px solid #333;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      margin: 0 auto 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .device-label {
+      font-size: 18px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    
+    .device-action {
+      font-size: 14px;
+      color: #fff;
+      background: #222;
+      padding: 8px 16px;
+      border-radius: 20px;
+      display: inline-block;
+    }
+    
+    .arrow {
+      font-size: 32px;
+      color: #666;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    
+    .floating-text {
+      position: absolute;
+      animation: float 3s ease-in-out infinite;
+      font-size: 14px;
+      color: #0f0;
+      font-family: monospace;
+      background: #000;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #0f0;
+    }
+    
+    @keyframes float {
+      0% { transform: translateY(0); opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { transform: translateY(-60px); opacity: 0; }
+    }
+    
+    /* Features Section */
+    .features {
+      padding: 80px 0;
+    }
+    
+    .section-title {
+      font-size: clamp(36px, 5vw, 48px);
+      text-align: center;
+      margin-bottom: 60px;
+      font-weight: 700;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 40px;
+    }
+    
+    .feature {
+      background: #111;
+      padding: 40px;
+      border-radius: 20px;
+      border: 1px solid #222;
+      transition: all 0.3s;
+    }
+    
+    .feature:hover {
+      transform: translateY(-5px);
+      border-color: #444;
+      background: #1a1a1a;
+    }
+    
+    .feature-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    
+    .feature-title {
+      font-size: 24px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    
+    .feature-desc {
+      color: #888;
+      line-height: 1.6;
+    }
+    
+    /* How it works */
+    .how-it-works {
+      padding: 80px 0;
+      background: #0a0a0a;
+    }
+    
+    .steps {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .step {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 40px;
+      gap: 24px;
+    }
+    
+    .step-number {
+      width: 48px;
+      height: 48px;
+      background: #222;
+      border: 2px solid #444;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    
+    .step-content {
+      flex: 1;
+    }
+    
+    .step-title {
+      font-size: 20px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    
+    .step-desc {
+      color: #888;
+    }
+    
+    /* Security Section */
+    .security {
+      padding: 80px 0;
+      text-align: center;
+    }
+    
+    .security-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: #111;
+      padding: 12px 24px;
+      border-radius: 24px;
+      margin-bottom: 24px;
+      border: 1px solid #222;
+    }
+    
+    .security-badge span {
+      font-size: 24px;
+    }
+    
+    .security-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      max-width: 800px;
+      margin: 40px auto 0;
+    }
+    
+    .security-item {
+      padding: 20px;
+      background: #111;
+      border-radius: 12px;
+      border: 1px solid #222;
+    }
+    
+    /* CTA Section */
+    .cta {
+      padding: 120px 0;
+      text-align: center;
+      background: linear-gradient(135deg, #111 0%, #000 100%);
+    }
+    
+    .cta h2 {
+      font-size: clamp(36px, 5vw, 56px);
+      margin-bottom: 24px;
+      font-weight: 700;
+    }
+    
+    .cta p {
+      font-size: 20px;
+      color: #888;
+      margin-bottom: 48px;
+    }
+    
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid #222;
+      text-align: center;
+      color: #666;
+    }
+    
+    footer a {
+      color: #888;
+      text-decoration: none;
+      margin: 0 15px;
+    }
+    
+    footer a:hover {
+      color: #fff;
+    }
+    
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+      
+      .demo-flow {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      
+      .arrow {
+        transform: rotate(90deg);
+      }
+      
+      .hero-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="container">
+      <div class="logo">🤫 Hush</div>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how">How it Works</a>
+        <a href="https://github.com/melvincarvalho/hush" target="_blank">GitHub</a>
+        <a href="index.html" class="try-now-btn">Try Now</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>Your Clipboard,<br>Everywhere</h1>
+        <p class="subtitle">Copy on your phone. Paste on your desktop. Encrypted. Instant.</p>
+        
+        <div class="hero-buttons">
+          <a href="index.html" class="btn-primary">Launch App</a>
+          <a href="#how" class="btn-secondary">See How It Works</a>
+        </div>
+        
+        <!-- Demo Visual -->
+        <div class="demo-visual">
+          <div class="demo-flow">
+            <div class="device">
+              <div class="device-icon">📱</div>
+              <div class="device-label">Phone</div>
+              <div class="device-action">Copy text</div>
+            </div>
+            
+            <div class="arrow">→</div>
+            
+            <div class="device">
+              <div class="device-icon">💻</div>
+              <div class="device-label">Desktop</div>
+              <div class="device-action">Paste instantly</div>
+            </div>
+          </div>
+          <div class="floating-text" style="left: 20%; animation-delay: 0s;">🔐 Encrypted</div>
+          <div class="floating-text" style="left: 50%; animation-delay: 1s;">⚡ Instant</div>
+          <div class="floating-text" style="left: 80%; animation-delay: 2s;">🔒 Private</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <h2 class="section-title">Why Hush?</h2>
+      <div class="features-grid">
+        <div class="feature">
+          <div class="feature-icon">🔐</div>
+          <h3 class="feature-title">End-to-End Encrypted</h3>
+          <p class="feature-desc">Your clipboard data is encrypted before leaving your device. Only you can decrypt it with your private key.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="feature-icon">🚀</div>
+          <h3 class="feature-title">Instant Sync</h3>
+          <p class="feature-desc">Copy on one device, instantly available on all others. No delay, no manual refresh needed.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="feature-icon">🌐</div>
+          <h3 class="feature-title">Works Everywhere</h3>
+          <p class="feature-desc">Not locked to Apple, Google, or Microsoft. Works across ALL platforms and devices.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="feature-icon">🎯</div>
+          <h3 class="feature-title">No Account Needed</h3>
+          <p class="feature-desc">No signup, no email, no tracking. Just generate a key and start syncing. You own your data.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="feature-icon">📱</div>
+          <h3 class="feature-title">PWA + Native Feel</h3>
+          <p class="feature-desc">Install as an app on any device. Android share integration for seamless clipboard access.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="feature-icon">⚡</div>
+          <h3 class="feature-title">Decentralized Network</h3>
+          <p class="feature-desc">Uses Nostr relay network. No central server, no single point of failure, no one can shut it down.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="how-it-works" id="how">
+    <div class="container">
+      <h2 class="section-title">How It Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3 class="step-title">Open Hush on All Devices</h3>
+            <p class="step-desc">Visit the web app or install the PWA on your phone, tablet, and desktop.</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3 class="step-title">Use Same Private Key</h3>
+            <p class="step-desc">Import your private key on each device. This key encrypts and decrypts your clipboard.</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3 class="step-title">Copy & Paste Freely</h3>
+            <p class="step-desc">Copy text on your phone, paste on desktop. Share from any Android app directly to Hush.</lopesccontent>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h3 class="step-title">Stay Private & Secure</h3>
+            <p class="step-desc">All data is end-to-end encrypted. No company, government, or hacker can read your clipboard.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security Section -->
+  <section class="security">
+    <div class="container">
+      <div class="security-badge">
+        <span>🛡️</span>
+        <span>Military-Grade Security</span>
+      </div>
+      <h2 class="section-title">Your Privacy, Guaranteed</h2>
+      <p style="max-width: 600px; margin: 0 auto 40px; color: #888; font-size: 18px;">
+        Unlike big tech clipboards, Hush can't read your data. Ever.
+      </p>
+      
+      <div class="security-grid">
+        <div class="security-item">
+          <strong>NIP-04 Encryption</strong><br>
+          <span style="color: #888;">Industry standard</span>
+        </div>
+        <div class="security-item">
+          <strong>Your Keys, Your Data</strong><br>
+          <span style="color: #888;">Self-sovereign</span>
+        </div>
+        <div class="security-item">
+          <strong>No Central Server</strong><br>
+          <span style="color: #888;">Can't be shut down</span>
+        </div>
+        <div class="security-item">
+          <strong>Open Source</strong><br>
+          <span style="color: #888;">Fully auditable</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta">
+    <div class="container">
+      <h2>Ready to Take Control of Your Clipboard?</h2>
+      <p>Join thousands who've ditched big tech clipboards for privacy.</p>
+      <a href="index.html" class="btn-primary">Start Using Hush Now</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>© 2024 Hush. MIT Licensed.</p>
+      <div style="margin-top: 20px;">
+        <a href="https://github.com/melvincarvalho/hush">GitHub</a>
+        <a href="https://github.com/melvincarvalho/hush/issues">Report Issue</a>
+        <a href="https://nostr.com">Nostr Protocol</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

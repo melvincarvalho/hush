@@ -9,6 +9,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="./manifest.json">
   <title>Hush</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -117,6 +119,88 @@
       margin: 10px 0;
       cursor: pointer;
     }
+    
+    /* QR Code Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal-content {
+      background: #111;
+      padding: 30px;
+      border-radius: 20px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      position: relative;
+    }
+    
+    .close-modal {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      font-size: 30px;
+      color: #666;
+      cursor: pointer;
+    }
+    
+    .close-modal:hover {
+      color: #fff;
+    }
+    
+    #qrcode {
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      display: inline-block;
+    }
+    
+    #qr-video {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 10px;
+    }
+    
+    .qr-buttons {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    
+    .qr-btn {
+      flex: 1;
+      background: #222;
+      color: #fff;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .qr-btn:hover {
+      background: #333;
+    }
+    
+    .scan-result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #1a1a1a;
+      border-radius: 10px;
+      word-break: break-all;
+      font-family: monospace;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -128,6 +212,12 @@
     <textarea id="msg" placeholder="Paste or type something..."></textarea>
     
     <button id="sendBtn">HUSH IT</button>
+    
+    <div class="qr-buttons">
+      <button class="qr-btn" id="showQrBtn">📱 SHOW QR</button>
+      <button class="qr-btn" id="scanQrBtn">📷 SCAN QR</button>
+    </div>
+    
     <button id="copyBtn" style="background:#222; color:#fff;">COPY KEY</button>
     <button id="importBtn" style="background:#444; color:#fff;">IMPORT KEY</button>
     
@@ -140,6 +230,34 @@
       <div style="margin-bottom:10px;">📱 Install Hush as an app</div>
       <button id="installBtn" style="background:#fff; color:#000; padding:10px 20px; border:none; border-radius:8px;">Install Now</button>
       <button id="dismissPrompt" style="background:transparent; color:#666; border:1px solid #666; padding:10px 20px; border-radius:8px; margin-left:10px;">Not Now</button>
+    </div>
+  </div>
+  
+  <!-- QR Code Modal -->
+  <div id="qrModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal" id="closeQr">&times;</span>
+      <h3>Your Private Key QR Code</h3>
+      <div id="qrcode"></div>
+      <p style="color:#888; font-size:14px; margin-top:20px;">
+        Scan this QR code on another device to sync your clipboard
+      </p>
+    </div>
+  </div>
+  
+  <!-- QR Scanner Modal -->
+  <div id="scanModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal" id="closeScan">&times;</span>
+      <h3>Scan QR Code</h3>
+      <video id="qr-video"></video>
+      <div id="scan-result" class="scan-result" style="display:none;">
+        <p>Scanned key:</p>
+        <div id="scanned-key"></div>
+        <button id="importScannedBtn" style="margin-top:15px; width:100%; padding:12px; background:#fff; color:#000; border:none; border-radius:8px; font-weight:600;">
+          Import This Key
+        </button>
+      </div>
     </div>
   </div>
 
@@ -222,9 +340,132 @@
     document.getElementById('copyBtn').onclick = copyKey;
     document.getElementById('importBtn').onclick = importKey;
     document.getElementById('refreshBtn').onclick = fetchMessages;
+    document.getElementById('showQrBtn').onclick = showQrCode;
+    document.getElementById('scanQrBtn').onclick = startQrScan;
     
     // Initialize SimplePool for fetching
     const pool = new window.NostrTools.SimplePool();
+    
+    // QR Code Functions
+    let qrScanner = null;
+    
+    function showQrCode() {
+      const modal = document.getElementById('qrModal');
+      modal.style.display = 'flex';
+      
+      // Clear any existing QR code
+      document.getElementById('qrcode').innerHTML = '';
+      
+      // Generate QR code with the private key
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(document.getElementById('qrcode'), {
+          text: skHex,
+          width: 256,
+          height: 256,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.L
+        });
+      } else {
+        document.getElementById('qrcode').innerHTML = '<p style="color:#f00;">QR library failed to load</p>';
+      }
+    }
+    
+    async function startQrScan() {
+      const modal = document.getElementById('scanModal');
+      modal.style.display = 'flex';
+      
+      const video = document.getElementById('qr-video');
+      const scanResult = document.getElementById('scan-result');
+      scanResult.style.display = 'none';
+      
+      try {
+        // Check if QrScanner is available
+        if (typeof QrScanner === 'undefined') {
+          throw new Error('QR Scanner library not loaded');
+        }
+        
+        // Set worker path for QrScanner
+        QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+        
+        // Initialize scanner if not already done
+        if (!qrScanner) {
+          qrScanner = new QrScanner(
+            video,
+            result => {
+              // Successfully scanned
+              handleQrScanResult(result.data);
+            },
+            {
+              highlightScanRegion: true,
+              highlightCodeOutline: true,
+            }
+          );
+        }
+        
+        // Start scanning
+        await qrScanner.start();
+        
+      } catch (error) {
+        console.error('QR scan error:', error);
+        alert('Camera access denied or not available. You can still import keys manually.');
+        modal.style.display = 'none';
+      }
+    }
+    
+    function handleQrScanResult(data) {
+      // Validate if it's a valid private key (64 hex chars)
+      if (/^[0-9a-fA-F]{64}$/.test(data)) {
+        // Stop scanning
+        if (qrScanner) {
+          qrScanner.stop();
+        }
+        
+        // Show the scanned result
+        const scanResult = document.getElementById('scan-result');
+        const scannedKey = document.getElementById('scanned-key');
+        
+        scannedKey.textContent = data.slice(0, 12) + '...' + data.slice(-6);
+        scanResult.style.display = 'block';
+        
+        // Store scanned key temporarily
+        window.tempScannedKey = data;
+        
+      } else {
+        // Not a valid key, keep scanning
+        console.log('Invalid QR content, continuing scan...');
+      }
+    }
+    
+    // Modal close handlers
+    document.getElementById('closeQr').onclick = function() {
+      document.getElementById('qrModal').style.display = 'none';
+    };
+    
+    document.getElementById('closeScan').onclick = function() {
+      document.getElementById('scanModal').style.display = 'none';
+      if (qrScanner) {
+        qrScanner.stop();
+      }
+    };
+    
+    // Import scanned key handler
+    document.getElementById('importScannedBtn').onclick = function() {
+      if (window.tempScannedKey) {
+        localStorage.setItem('hush_key', window.tempScannedKey);
+        location.reload();
+      }
+    };
+    
+    // Click outside modal to close
+    window.onclick = function(event) {
+      if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+        if (qrScanner && event.target.id === 'scanModal') {
+          qrScanner.stop();
+        }
+      }
+    };
     
     // Auto-fetch messages on load
     fetchMessages();
@@ -479,24 +720,82 @@
     
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
+      // Listen for messages from service worker
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'SW_UPDATE_AVAILABLE') {
+          console.log('New version available:', event.data.version);
+          // Show subtle update notification
+          const updateBanner = document.createElement('div');
+          updateBanner.style.cssText = `
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-size: 14px;
+            cursor: pointer;
+            animation: slideDown 0.3s ease-out;
+          `;
+          updateBanner.innerHTML = '✨ New QR sync feature available! Tap to refresh';
+          updateBanner.onclick = () => window.location.reload();
+          document.body.appendChild(updateBanner);
+          
+          // Auto-hide after 10 seconds
+          setTimeout(() => {
+            if (updateBanner.parentNode) {
+              updateBanner.style.animation = 'slideUp 0.3s ease-out';
+              setTimeout(() => updateBanner.remove(), 300);
+            }
+          }, 10000);
+        }
+      });
+      
       navigator.serviceWorker.register('./sw.js')
         .then(registration => {
           console.log('SW registered');
-          // Check for updates
+          
+          // Check for updates every 60 seconds
+          setInterval(() => {
+            registration.update();
+          }, 60000);
+          
+          // Check for updates on focus
+          document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+              registration.update();
+            }
+          });
+          
+          // Handle updates
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New version available
-                if (confirm('New version available! Refresh to update?')) {
-                  window.location.reload();
-                }
+                console.log('New service worker installed, waiting for activation');
               }
             });
           });
         })
-        .catch(error => console.log('SW registration failed'));
+        .catch(error => console.log('SW registration failed:', error));
     }
+    
+    // Add animation styles
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideDown {
+        from { transform: translate(-50%, -100%); opacity: 0; }
+        to { transform: translate(-50%, 0); opacity: 1; }
+      }
+      @keyframes slideUp {
+        from { transform: translate(-50%, 0); opacity: 1; }
+        to { transform: translate(-50%, -100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
   });
   </script>
 </body>
