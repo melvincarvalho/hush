@@ -77,38 +77,76 @@
     }
     .message {
       background: #111;
-      padding: 12px;
-      border-radius: 8px;
-      margin: 8px 0;
-      font-size: 14px;
+      border: 1px solid #222;
+      border-radius: 12px;
+      margin: 12px 0;
+      padding: 0;
       position: relative;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-      white-space: pre-wrap;
+      transition: all 0.2s;
+      overflow: hidden;
     }
-    .copy-btn {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: #333;
-      color: #fff;
-      border: none;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      cursor: pointer;
-      opacity: 0.7;
+    .message:hover {
+      border-color: #333;
+      background: #161616;
     }
-    .copy-btn:hover {
-      opacity: 1;
-      background: #555;
-    }
-    .message-content {
-      margin-right: 60px;
+    .message-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid #222;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .message-time {
       color: #666;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .message-content {
+      padding: 16px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: #e0e0e0;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+    .message-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .message:hover .message-actions {
+      opacity: 1;
+    }
+    .copy-btn {
+      background: transparent;
+      color: #888;
+      border: 1px solid #333;
+      padding: 6px 10px;
+      border-radius: 6px;
       font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .copy-btn:hover {
+      background: #222;
+      color: #fff;
+      border-color: #444;
+    }
+    .copy-btn.copied {
+      background: #0f380f;
+      color: #0f0;
+      border-color: #0f0;
     }
     .refresh-btn {
       background: #333;
@@ -208,6 +246,10 @@
     <h1>🤫 Hush</h1>
     
     <div class="key-box" id="key">Loading...</div>
+    <div style="text-align: center; color: #444; font-size: 10px; margin: -10px 0 10px;">
+      v3.1.0 
+      <span id="updateCheck" style="cursor: pointer; text-decoration: underline; margin-left: 10px;">check update</span>
+    </div>
     
     <textarea id="msg" placeholder="Paste or type something..."></textarea>
     
@@ -335,6 +377,21 @@
     // Auto-focus textarea
     document.getElementById('msg').focus();
     
+    // Manual update check
+    document.getElementById('updateCheck').onclick = async function() {
+      this.textContent = 'checking...';
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update();
+          // Force reload with cache bypass
+          setTimeout(() => {
+            window.location.reload(true);
+          }, 1000);
+        }
+      }
+    };
+    
     // Attach event listeners
     document.getElementById('sendBtn').onclick = send;
     document.getElementById('copyBtn').onclick = copyKey;
@@ -345,6 +402,18 @@
     
     // Initialize SimplePool for fetching
     const pool = new window.NostrTools.SimplePool();
+    
+    // Time ago helper
+    function getTimeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      
+      if (seconds < 60) return 'just now';
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+      if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+      
+      return date.toLocaleDateString();
+    }
     
     // QR Code Functions
     let qrScanner = null;
@@ -639,38 +708,57 @@
               
               const decrypted = await window.NostrTools.nip04.decrypt(sk, otherPubkey, event.content);
               
-              // Create message element
+              // Create message element with better UX
               const messageEl = document.createElement('div');
               messageEl.className = 'message';
               
+              // Create header with time
+              const headerEl = document.createElement('div');
+              headerEl.className = 'message-header';
+              
               const timeEl = document.createElement('div');
               timeEl.className = 'message-time';
-              timeEl.textContent = new Date(event.created_at * 1000).toLocaleString();
+              const date = new Date(event.created_at * 1000);
+              const timeAgo = getTimeAgo(date);
+              timeEl.textContent = timeAgo;
+              timeEl.title = date.toLocaleString(); // Full date on hover
               
+              headerEl.appendChild(timeEl);
+              
+              // Create content
               const contentEl = document.createElement('div');
               contentEl.className = 'message-content';
               contentEl.textContent = decrypted;
               
+              // Create actions container
+              const actionsEl = document.createElement('div');
+              actionsEl.className = 'message-actions';
+              
+              // Copy button with icon
               const copyBtn = document.createElement('button');
               copyBtn.className = 'copy-btn';
-              copyBtn.textContent = 'Copy';
+              copyBtn.innerHTML = '📋 Copy';
               copyBtn.onclick = () => {
                 navigator.clipboard.writeText(decrypted).then(() => {
-                  copyBtn.textContent = '✓';
+                  copyBtn.classList.add('copied');
+                  copyBtn.innerHTML = '✓ Copied';
                   setTimeout(() => {
-                    copyBtn.textContent = 'Copy';
-                  }, 1000);
+                    copyBtn.classList.remove('copied');
+                    copyBtn.innerHTML = '📋 Copy';
+                  }, 2000);
                 }).catch(() => {
-                  copyBtn.textContent = '✗';
+                  copyBtn.innerHTML = '✗ Failed';
                   setTimeout(() => {
-                    copyBtn.textContent = 'Copy';
-                  }, 1000);
+                    copyBtn.innerHTML = '📋 Copy';
+                  }, 2000);
                 });
               };
               
-              messageEl.appendChild(timeEl);
+              actionsEl.appendChild(copyBtn);
+              
+              messageEl.appendChild(headerEl);
               messageEl.appendChild(contentEl);
-              messageEl.appendChild(copyBtn);
+              messageEl.appendChild(actionsEl);
               messagesDiv.appendChild(messageEl);
               
             } catch (e) {
@@ -758,10 +846,13 @@
         .then(registration => {
           console.log('SW registered');
           
-          // Check for updates every 60 seconds
+          // Immediately check for updates
+          registration.update();
+          
+          // Check for updates every 30 seconds
           setInterval(() => {
             registration.update();
-          }, 60000);
+          }, 30000);
           
           // Check for updates on focus
           document.addEventListener('visibilitychange', () => {

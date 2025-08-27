@@ -1,5 +1,5 @@
 // INCREMENT VERSION to force update
-const VERSION = '3.0.0';  // Changed from v2 to v3.0.0 for QR update
+const VERSION = '3.1.0';  // Better message UX
 const CACHE_NAME = `hush-v${VERSION}`;
 const urlsToCache = [
   './',

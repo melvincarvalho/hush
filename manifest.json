@@ -2,7 +2,7 @@
   "name": "Hush - Encrypted Messages",
   "short_name": "Hush",
   "description": "Send encrypted messages via Nostr relays",
-  "start_url": "./",
+  "start_url": "./?v=3",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
