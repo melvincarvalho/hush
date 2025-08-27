@@ -287,13 +287,17 @@
     
     <div class="key-box" id="key">Loading...</div>
     <div style="text-align: center; color: #444; font-size: 10px; margin: -10px 0 10px;">
-      v3.2.3 
+      v3.4.0 
       <span id="updateCheck" style="cursor: pointer; text-decoration: underline; margin-left: 10px;">check update</span>
     </div>
     
     <textarea id="msg" placeholder="Paste or type something..."></textarea>
     
     <button id="sendBtn">HUSH IT</button>
+    
+    <div id="status"></div>
+    
+    <div id="messages" class="messages"></div>
     
     <div class="qr-buttons">
       <button class="qr-btn" id="showQrBtn">📱 SHOW QR</button>
@@ -303,11 +307,8 @@
     <button id="copyBtn" style="background:#222; color:#fff;">COPY KEY</button>
     <button id="importBtn" style="background:#444; color:#fff;">IMPORT KEY</button>
     
-    <div id="status"></div>
-    
     <button id="refreshBtn" class="refresh-btn">↻ REFRESH MESSAGES</button>
-    <button id="testSyncBtn" class="refresh-btn" style="background:#444;">🧪 TEST SYNC</button>
-    <div id="messages" class="messages"></div>
+    <button id="testSyncBtn" class="refresh-btn" style="background:#444; display:none;">🧪 TEST SYNC</button>
     
     <div id="installPrompt" style="display:none; background:#333; padding:15px; border-radius:12px; margin:10px 0; text-align:center;">
       <div style="margin-bottom:10px;">📱 Install Hush as an app</div>
@@ -430,6 +431,18 @@
             window.location.reload(true);
           }, 1000);
         }
+      }
+    };
+    
+    // Show test button on version double-click (for debugging)
+    document.getElementById('updateCheck').ondblclick = function() {
+      const testBtn = document.getElementById('testSyncBtn');
+      if (testBtn.style.display === 'none') {
+        testBtn.style.display = 'inline-block';
+        this.textContent = 'debug mode';
+        setTimeout(() => {
+          this.textContent = 'check update';
+        }, 2000);
       }
     };
     
@@ -628,13 +641,16 @@
       }
     }
     
-    // Add message to UI (extracted from fetchMessages)
+    // Add message to UI - show only latest message
     function addMessageToUI(event, decrypted, isNew = false) {
       const messagesDiv = document.getElementById('messages');
       
       // Check if message already exists (avoid duplicates)
       const existingMessage = messagesDiv.querySelector(`[data-event-id="${event.id}"]`);
       if (existingMessage) return;
+      
+      // Clear all existing messages - only show the latest one
+      messagesDiv.innerHTML = '';
       
       const messageEl = document.createElement('div');
       messageEl.className = 'message' + (isNew ? ' new-message' : '');
@@ -648,7 +664,7 @@
       timeEl.className = 'message-time';
       const date = new Date(event.created_at * 1000);
       const timeAgo = getTimeAgo(date);
-      timeEl.textContent = timeAgo;
+      timeEl.textContent = `Latest: ${timeAgo}`;
       timeEl.title = date.toLocaleString();
       
       headerEl.appendChild(timeEl);
@@ -688,13 +704,11 @@
       messageEl.appendChild(contentEl);
       messageEl.appendChild(actionsEl);
       
-      // Insert at top for new messages
+      messagesDiv.appendChild(messageEl);
+      
+      // Animate in if it's a new message
       if (isNew) {
-        messagesDiv.insertBefore(messageEl, messagesDiv.firstChild);
-        // Animate in
         messageEl.style.animation = 'slideInFromTop 0.3s ease-out';
-      } else {
-        messagesDiv.appendChild(messageEl);
       }
     }
     
@@ -1088,21 +1102,22 @@
         if (uniqueEvents.length === 0) {
           messagesDiv.innerHTML = '<div class="message">No messages yet</div>';
         } else {
-          for (const event of uniqueEvents) {
-            try {
-              // Decrypt message
-              const otherPubkey = event.pubkey === pk ? 
-                (event.tags.find(tag => tag[0] === 'p')?.[1] || pk) : 
-                event.pubkey;
-              
-              const decrypted = await window.NostrTools.nip04.decrypt(sk, otherPubkey, event.content);
-              
-              // Use the shared function to add message
-              addMessageToUI(event, decrypted, false);
-              
-            } catch (e) {
-              console.warn('Could not decrypt message:', e);
-            }
+          // Only show the latest message (first in sorted array)
+          const latestEvent = uniqueEvents[0];
+          try {
+            // Decrypt message
+            const otherPubkey = latestEvent.pubkey === pk ? 
+              (latestEvent.tags.find(tag => tag[0] === 'p')?.[1] || pk) : 
+              latestEvent.pubkey;
+            
+            const decrypted = await window.NostrTools.nip04.decrypt(sk, otherPubkey, latestEvent.content);
+            
+            // Use the shared function to add message
+            addMessageToUI(latestEvent, decrypted, false);
+            
+          } catch (e) {
+            console.warn('Could not decrypt latest message:', e);
+            messagesDiv.innerHTML = '<div class="message">Could not decrypt latest message</div>';
           }
         }
         
