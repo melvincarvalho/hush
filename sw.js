@@ -1,5 +1,5 @@
 // INCREMENT VERSION to force update
-const VERSION = '3.1.0';  // Better message UX
+const VERSION = '3.2.3';  // Deep WebSocket debugging
 const CACHE_NAME = `hush-v${VERSION}`;
 const urlsToCache = [
   './',

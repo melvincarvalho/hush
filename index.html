@@ -148,6 +148,46 @@
       color: #0f0;
       border-color: #0f0;
     }
+    
+    /* New message animation */
+    .new-message {
+      border-color: #0f380f !important;
+      background: #0a1a0a !important;
+    }
+    
+    @keyframes slideInFromTop {
+      from {
+        transform: translateY(-20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+    
     .refresh-btn {
       background: #333;
       color: #fff;
@@ -247,7 +287,7 @@
     
     <div class="key-box" id="key">Loading...</div>
     <div style="text-align: center; color: #444; font-size: 10px; margin: -10px 0 10px;">
-      v3.1.0 
+      v3.2.3 
       <span id="updateCheck" style="cursor: pointer; text-decoration: underline; margin-left: 10px;">check update</span>
     </div>
     
@@ -266,6 +306,7 @@
     <div id="status"></div>
     
     <button id="refreshBtn" class="refresh-btn">↻ REFRESH MESSAGES</button>
+    <button id="testSyncBtn" class="refresh-btn" style="background:#444;">🧪 TEST SYNC</button>
     <div id="messages" class="messages"></div>
     
     <div id="installPrompt" style="display:none; background:#333; padding:15px; border-radius:12px; margin:10px 0; text-align:center;">
@@ -399,9 +440,288 @@
     document.getElementById('refreshBtn').onclick = fetchMessages;
     document.getElementById('showQrBtn').onclick = showQrCode;
     document.getElementById('scanQrBtn').onclick = startQrScan;
+    document.getElementById('testSyncBtn').onclick = testSync;
     
-    // Initialize SimplePool for fetching
+    // Initialize SimplePool for fetching and subscriptions
     const pool = new window.NostrTools.SimplePool();
+    let subscription = null;
+    let isConnected = false;
+    
+    // Connection status indicator
+    function updateConnectionStatus(status) {
+      const indicator = document.getElementById('connectionStatus');
+      if (!indicator) {
+        const statusEl = document.createElement('div');
+        statusEl.id = 'connectionStatus';
+        statusEl.style.cssText = `
+          position: fixed;
+          top: 60px;
+          right: 20px;
+          padding: 6px 12px;
+          border-radius: 20px;
+          font-size: 12px;
+          z-index: 100;
+          transition: all 0.3s;
+        `;
+        document.body.appendChild(statusEl);
+      }
+      
+      const indicator2 = document.getElementById('connectionStatus');
+      if (status === 'connected') {
+        indicator2.style.background = '#0f380f';
+        indicator2.style.color = '#0f0';
+        indicator2.style.border = '1px solid #0f0';
+        indicator2.textContent = '🟢 Live';
+        isConnected = true;
+      } else if (status === 'connecting') {
+        indicator2.style.background = '#383008';
+        indicator2.style.color = '#ff0';
+        indicator2.style.border = '1px solid #ff0';
+        indicator2.textContent = '🟡 Connecting...';
+        isConnected = false;
+      } else {
+        indicator2.style.background = '#380f0f';
+        indicator2.style.color = '#f00';
+        indicator2.style.border = '1px solid #f00';
+        indicator2.textContent = '🔴 Offline';
+        isConnected = false;
+      }
+    }
+    
+    // Start real-time sync with multiple relays for testing
+    function startRealtimeSync() {
+      // Test multiple relays to see which ones work
+      const relays = [
+        'wss://relay.primal.net',
+        'wss://relay.damus.io',
+        'wss://nos.lol',
+        'wss://relay.nostr.band'
+      ];
+      
+      updateConnectionStatus('connecting');
+      
+      // Use current timestamp for real-time only
+      const since = Math.floor(Date.now() / 1000);
+      
+      console.log('🔌 Starting WebSocket subscription at:', new Date(since * 1000).toLocaleString());
+      console.log('👤 Watching for events from pubkey:', pk);
+      console.log('🌐 Testing relays:', relays);
+      
+      try {
+        // Close existing subscription
+        if (subscription) {
+          subscription.close();
+          subscription = null;
+        }
+        
+        // Create filter to watch our own events
+        const filter = {
+          kinds: [31337],
+          authors: [pk],
+          since: since
+        };
+        
+        console.log('📡 Subscription filter:', JSON.stringify(filter, null, 2));
+        
+        // Test direct relay connections first
+        relays.forEach(async (relayUrl, index) => {
+          try {
+            console.log(`🔗 Testing direct connection to ${relayUrl}...`);
+            const testRelay = await window.NostrTools.Relay.connect(relayUrl);
+            console.log(`✅ ${relayUrl} connected successfully`);
+            
+            testRelay.on('connect', () => {
+              console.log(`🔗 ${relayUrl} WebSocket connected`);
+            });
+            
+            testRelay.on('disconnect', () => {
+              console.log(`❌ ${relayUrl} WebSocket disconnected`);
+            });
+            
+            // Close test connection after 2 seconds
+            setTimeout(() => {
+              testRelay.close();
+            }, 2000);
+            
+          } catch (e) {
+            console.log(`❌ ${relayUrl} connection failed:`, e);
+          }
+        });
+        
+        // Subscribe with nostr-tools SimplePool
+        console.log('📡 Starting SimplePool subscription...');
+        subscription = pool.subscribeMany(
+          relays,
+          [filter],
+          {
+            onevent(event) {
+              console.log('🚨🚨🚨 WEBSOCKET EVENT RECEIVED 🚨🚨🚨');
+              console.log('Event details:', {
+                id: event.id,
+                created_at: event.created_at,
+                time: new Date(event.created_at * 1000).toLocaleString(),
+                kind: event.kind,
+                pubkey: event.pubkey,
+                matches_our_pubkey: event.pubkey === pk,
+                tags: event.tags,
+                content: event.content.slice(0, 100)
+              });
+              console.log('Full event object:', event);
+              
+              // Only handle if it's newer than our subscription time
+              if (event.created_at >= since) {
+                console.log('📨 ✅ Processing new event (created after subscription)');
+                handleNewMessage(event);
+              } else {
+                console.log('⏭️ ❌ Skipping old event (created before subscription)');
+              }
+            },
+            onnotice(notice) {
+              console.log('📢 Relay notice:', notice);
+            },
+            oneose() {
+              console.log('✅ EOSE: End of stored events, WebSocket now listening for live events');
+              updateConnectionStatus('connected');
+            },
+            onclose(reason) {
+              console.log('❌ WebSocket subscription closed:', reason);
+              updateConnectionStatus('offline');
+            }
+          }
+        );
+        
+        console.log('✅ WebSocket subscription created, waiting for events...');
+        console.log('Subscription object:', subscription);
+        
+        // Add a heartbeat to verify connection is alive
+        const heartbeat = setInterval(() => {
+          console.log('💓 Heartbeat - subscription still active:', !!subscription);
+          if (!subscription) {
+            clearInterval(heartbeat);
+          }
+        }, 30000); // Every 30 seconds
+        
+      } catch (error) {
+        console.error('❌ Failed to start WebSocket subscription:', error);
+        updateConnectionStatus('offline');
+      }
+    }
+    
+    // Handle new incoming messages
+    async function handleNewMessage(event) {
+      try {
+        // Decrypt the message
+        const otherPubkey = event.pubkey === pk ? 
+          (event.tags.find(tag => tag[0] === 'p')?.[1] || pk) : 
+          event.pubkey;
+        
+        const decrypted = await window.NostrTools.nip04.decrypt(sk, otherPubkey, event.content);
+        
+        // Add to messages UI
+        addMessageToUI(event, decrypted, true); // true = isNew
+        
+        // Show sync notification
+        showSyncNotification('New message synced!');
+        
+      } catch (e) {
+        console.warn('Could not decrypt new message:', e);
+      }
+    }
+    
+    // Add message to UI (extracted from fetchMessages)
+    function addMessageToUI(event, decrypted, isNew = false) {
+      const messagesDiv = document.getElementById('messages');
+      
+      // Check if message already exists (avoid duplicates)
+      const existingMessage = messagesDiv.querySelector(`[data-event-id="${event.id}"]`);
+      if (existingMessage) return;
+      
+      const messageEl = document.createElement('div');
+      messageEl.className = 'message' + (isNew ? ' new-message' : '');
+      messageEl.setAttribute('data-event-id', event.id);
+      
+      // Create header with time
+      const headerEl = document.createElement('div');
+      headerEl.className = 'message-header';
+      
+      const timeEl = document.createElement('div');
+      timeEl.className = 'message-time';
+      const date = new Date(event.created_at * 1000);
+      const timeAgo = getTimeAgo(date);
+      timeEl.textContent = timeAgo;
+      timeEl.title = date.toLocaleString();
+      
+      headerEl.appendChild(timeEl);
+      
+      // Create content
+      const contentEl = document.createElement('div');
+      contentEl.className = 'message-content';
+      contentEl.textContent = decrypted;
+      
+      // Create actions container
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'message-actions';
+      
+      // Copy button with icon
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn';
+      copyBtn.innerHTML = '📋 Copy';
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(decrypted).then(() => {
+          copyBtn.classList.add('copied');
+          copyBtn.innerHTML = '✓ Copied';
+          setTimeout(() => {
+            copyBtn.classList.remove('copied');
+            copyBtn.innerHTML = '📋 Copy';
+          }, 2000);
+        }).catch(() => {
+          copyBtn.innerHTML = '✗ Failed';
+          setTimeout(() => {
+            copyBtn.innerHTML = '📋 Copy';
+          }, 2000);
+        });
+      };
+      
+      actionsEl.appendChild(copyBtn);
+      
+      messageEl.appendChild(headerEl);
+      messageEl.appendChild(contentEl);
+      messageEl.appendChild(actionsEl);
+      
+      // Insert at top for new messages
+      if (isNew) {
+        messagesDiv.insertBefore(messageEl, messagesDiv.firstChild);
+        // Animate in
+        messageEl.style.animation = 'slideInFromTop 0.3s ease-out';
+      } else {
+        messagesDiv.appendChild(messageEl);
+      }
+    }
+    
+    // Show sync notification
+    function showSyncNotification(message) {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 100px;
+        right: 20px;
+        background: #0f380f;
+        color: #0f0;
+        border: 1px solid #0f0;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 12px;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+      `;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+      }, 2000);
+    }
     
     // Time ago helper
     function getTimeAgo(date) {
@@ -539,6 +859,40 @@
     // Auto-fetch messages on load
     fetchMessages();
     
+    // Start real-time sync
+    setTimeout(() => {
+      startRealtimeSync();
+      
+      
+    }, 2000); // Wait 2 seconds after initial load
+    
+    // Handle app focus/blur for connection management
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // App went to background - keep connection but reduce activity
+        console.log('App backgrounded');
+      } else {
+        // App came to foreground - ensure connection is alive
+        console.log('App foregrounded');
+        if (!isConnected) {
+          startRealtimeSync();
+        }
+      }
+    });
+    
+    // Handle online/offline events
+    window.addEventListener('online', () => {
+      console.log('Back online');
+      if (!isConnected) {
+        startRealtimeSync();
+      }
+    });
+    
+    window.addEventListener('offline', () => {
+      console.log('Gone offline');
+      updateConnectionStatus('offline');
+    });
+    
     // Handle shared text from Android share intent
     const urlParams = new URLSearchParams(window.location.search);
     const sharedText = urlParams.get('shared_text');
@@ -574,18 +928,46 @@
         // Finalize event (signs it and adds id)
         const signedEvent = window.NostrTools.finalizeEvent(unsignedEvent, sk);
         
-        // Send to relays (parallel)
+        // Send to relays (parallel) - using same relays as subscription
         const relays = [
+          'wss://relay.primal.net',
           'wss://relay.damus.io',
           'wss://nos.lol',
-          'wss://relay.primal.net'
+          'wss://relay.nostr.band'
         ];
         
-        await Promise.any(relays.map(async url => {
+        console.log('📤📤📤 PUBLISHING EVENT 📤📤📤');
+        console.log('Event details:', {
+          id: signedEvent.id,
+          created_at: signedEvent.created_at,
+          time: new Date(signedEvent.created_at * 1000).toLocaleString(),
+          kind: signedEvent.kind,
+          pubkey: signedEvent.pubkey,
+          tags: signedEvent.tags,
+          content: signedEvent.content.slice(0, 50) + '...'
+        });
+        console.log('Publishing to relays:', relays);
+        
+        // Publish to ALL relays and track which ones succeed
+        const publishResults = await Promise.allSettled(relays.map(async url => {
+          console.log(`📤 Attempting to publish to ${url}...`);
           const relay = await window.NostrTools.Relay.connect(url);
           await relay.publish(signedEvent);
+          console.log(`✅ Successfully published to ${url}`);
           relay.close();
+          return { relay: url, success: true };
         }));
+        
+        const successful = publishResults.filter(r => r.status === 'fulfilled');
+        const failed = publishResults.filter(r => r.status === 'rejected');
+        
+        console.log(`📊 Publish results: ${successful.length} success, ${failed.length} failed`);
+        successful.forEach(r => console.log(`✅ Published to: ${r.value.relay}`));
+        failed.forEach((r, i) => console.log(`❌ Failed to publish to ${relays[publishResults.indexOf(r)]}: ${r.reason}`));
+        
+        if (successful.length === 0) {
+          throw new Error('Failed to publish to any relay');
+        }
         
         // Success!
         document.getElementById('msg').value = '';
@@ -612,6 +994,13 @@
       setTimeout(() => {
         document.getElementById('status').innerHTML = '';
       }, 2000);
+    }
+    
+    // Test sync function
+    function testSync() {
+      const testMsg = `Sync test ${new Date().getTime()}`;
+      document.getElementById('msg').value = testMsg;
+      send();
     }
     
     function importKey() {
@@ -708,58 +1097,8 @@
               
               const decrypted = await window.NostrTools.nip04.decrypt(sk, otherPubkey, event.content);
               
-              // Create message element with better UX
-              const messageEl = document.createElement('div');
-              messageEl.className = 'message';
-              
-              // Create header with time
-              const headerEl = document.createElement('div');
-              headerEl.className = 'message-header';
-              
-              const timeEl = document.createElement('div');
-              timeEl.className = 'message-time';
-              const date = new Date(event.created_at * 1000);
-              const timeAgo = getTimeAgo(date);
-              timeEl.textContent = timeAgo;
-              timeEl.title = date.toLocaleString(); // Full date on hover
-              
-              headerEl.appendChild(timeEl);
-              
-              // Create content
-              const contentEl = document.createElement('div');
-              contentEl.className = 'message-content';
-              contentEl.textContent = decrypted;
-              
-              // Create actions container
-              const actionsEl = document.createElement('div');
-              actionsEl.className = 'message-actions';
-              
-              // Copy button with icon
-              const copyBtn = document.createElement('button');
-              copyBtn.className = 'copy-btn';
-              copyBtn.innerHTML = '📋 Copy';
-              copyBtn.onclick = () => {
-                navigator.clipboard.writeText(decrypted).then(() => {
-                  copyBtn.classList.add('copied');
-                  copyBtn.innerHTML = '✓ Copied';
-                  setTimeout(() => {
-                    copyBtn.classList.remove('copied');
-                    copyBtn.innerHTML = '📋 Copy';
-                  }, 2000);
-                }).catch(() => {
-                  copyBtn.innerHTML = '✗ Failed';
-                  setTimeout(() => {
-                    copyBtn.innerHTML = '📋 Copy';
-                  }, 2000);
-                });
-              };
-              
-              actionsEl.appendChild(copyBtn);
-              
-              messageEl.appendChild(headerEl);
-              messageEl.appendChild(contentEl);
-              messageEl.appendChild(actionsEl);
-              messagesDiv.appendChild(messageEl);
+              // Use the shared function to add message
+              addMessageToUI(event, decrypted, false);
               
             } catch (e) {
               console.warn('Could not decrypt message:', e);
@@ -844,10 +1183,12 @@
       
       navigator.serviceWorker.register('./sw.js')
         .then(registration => {
-          console.log('SW registered');
+          console.log('SW registered successfully');
           
           // Immediately check for updates
-          registration.update();
+          registration.update().catch(err => {
+            console.log('Update check failed:', err);
+          });
           
           // Check for updates every 30 seconds
           setInterval(() => {
@@ -871,7 +1212,10 @@
             });
           });
         })
-        .catch(error => console.log('SW registration failed:', error));
+        .catch(error => {
+          console.log('SW registration failed:', error);
+          // App still works without SW
+        });
     }
     
     // Add animation styles
